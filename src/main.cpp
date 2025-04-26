@@ -11,24 +11,19 @@
 #include <ArduinoJson.h>
 #include <WiFiUdp.h>
 #include "image.cpp"
+#include "ws2812b.h"
+#include "button.h"
 
-#include <Adafruit_NeoPixel.h>
-#ifdef __AVR__
- #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
-#endif
+#define BUTTON_PIN 2 // 现在在main.cpp定义了引脚
 
 #define PIXEL_PIN    13  // Digital IO pin connected to the NeoPixels.
 #define PIXEL_COUNT 6  // Number of NeoPixels
 
 
-#define BUTTON_PIN 2 // GPIO2 引脚 (D4)
-volatile bool buttonPressed = false;     // 按键标志
-unsigned long lastPressTime = 0;         // 上次按键时间
-const unsigned long debounceDelay = 50;  // 消抖时间 (ms)
+
 // 定义
 // 分压器比例（输入电压到 ADC 电压的比例）
 const float voltageDividerRatio = 8.4; // 分压比（8.4倍缩小）
-
 // 电压范围（电池电压）
 const float minVoltage = 6.4; // 电压为0%时
 const float maxVoltage = 8.4; // 电压为100%时
@@ -37,21 +32,13 @@ const int numSamples = 10;
 float batteryVoltage = 0; // 计算电池电压
 int batteryPercentage = 0;
 
-// Declare our NeoPixel strip object:
-Adafruit_NeoPixel strip(PIXEL_COUNT, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
-// Argument 1 = Number of pixels in NeoPixel strip
-// Argument 2 = Arduino pin number (most are valid)
-// Argument 3 = Pixel type flags, add together as needed:
-//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
-//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
-//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
-//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
-//   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
 
 Servo servo1;
 Servo servo2;
 Servo servo3;
 Servo servo4;
+
+
 U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE, /* clock=*/5, /* data=*/4); // ESP32 Thing, HW I2C with pin remapping
 // 设置WiFi热点名称和密码
 const char *ssid = "EDA-Robot";
@@ -68,6 +55,10 @@ String weather = "";
 String useruid = "";
 String cityname = "";
 String weatherapi = "";
+
+
+
+
 int engine1 = 14;                 // 舵机引脚
 // int engine1offsetleftpwm = -93;   // 舵机左转补偿
 // int engine1offsetrightpwm = -87;  // 舵机左转补偿-40
@@ -81,6 +72,10 @@ int engine4 = 15;                 // 舵机引脚
 // int engine4offsetleftpwm = -78;   // 舵机左转补偿
 // int engine4offsetrightpwm = -109; // 舵机左转补偿-71
 int speed = 300;                  // 舵机转速
+
+
+
+
 int runtime = 100;                // 运动延时**预留变量，用于控制动作连贯性，如果你不知道这是什么不建议修改**
 static bool initweather = false;  // 天气初始化
 bool freestate = false;
@@ -89,15 +84,10 @@ int prevEmojiState = -1; // 用于跟踪之前的 emojiState
 int actionstate = 0;
 int emojiState = 0; // 表情状态
 const char *ssidFile = "/ssid.json";
-void ICACHE_RAM_ATTR handleButtonPress()
-{
-    unsigned long currentTime = millis();
-    if (currentTime - lastPressTime > debounceDelay)
-    {
-        buttonPressed = true;
-        lastPressTime = currentTime;
-    }
-}
+
+
+
+
 void handleWiFiConfig()
 {
     // 启动服务器
@@ -471,6 +461,46 @@ void fetchWeather()
         } while (u8g2.nextPage());
     }
 }
+
+
+
+// 对 ADC 数据多次采样并计算平均值
+float getAverageAdcVoltage()
+{
+    long totalAdcValue = 0;
+
+    // 多次采样
+    for (int i = 0; i < numSamples; i++)
+    {
+        totalAdcValue += analogRead(A0); // 读取 ADC 数据
+        delay(10);                       // 每次采样间隔 10ms
+    }
+
+    // 计算平均 ADC 值
+    float averageAdcValue = totalAdcValue / (float)numSamples;
+
+    // 将 ADC 值转换为电压
+    return (averageAdcValue / 1023.0) * 1.0; // ESP8266 的参考电压为 1.0V
+}
+
+// 计算电池电量百分比的函数
+int mapBatteryPercentage(float voltage)
+{
+    if (voltage <= minVoltage)
+        return 0; // 小于等于最小电压时，电量为 0%
+    if (voltage >= maxVoltage)
+        return 100; // 大于等于最大电压时，电量为 100%
+
+    // 根据线性比例计算电量百分比
+    return (int)((voltage - minVoltage) / (maxVoltage - minVoltage) * 100);
+}
+
+
+
+
+
+
+
 
 void front()
 {
@@ -861,65 +891,16 @@ void dosleep()
     servo4.write(0); 
 }
 
-// 对 ADC 数据多次采样并计算平均值
-float getAverageAdcVoltage()
-{
-    long totalAdcValue = 0;
 
-    // 多次采样
-    for (int i = 0; i < numSamples; i++)
-    {
-        totalAdcValue += analogRead(A0); // 读取 ADC 数据
-        delay(10);                       // 每次采样间隔 10ms
-    }
-
-    // 计算平均 ADC 值
-    float averageAdcValue = totalAdcValue / (float)numSamples;
-
-    // 将 ADC 值转换为电压
-    return (averageAdcValue / 1023.0) * 1.0; // ESP8266 的参考电压为 1.0V
-}
-
-// 计算电池电量百分比的函数
-int mapBatteryPercentage(float voltage)
-{
-    if (voltage <= minVoltage)
-        return 0; // 小于等于最小电压时，电量为 0%
-    if (voltage >= maxVoltage)
-        return 100; // 大于等于最大电压时，电量为 100%
-
-    // 根据线性比例计算电量百分比
-    return (int)((voltage - minVoltage) / (maxVoltage - minVoltage) * 100);
-}
-
-void rainbow(int wait) {
-    // Hue of first pixel runs 3 complete loops through the color wheel.
-    // Color wheel has a range of 65536 but it's OK if we roll over, so
-    // just count from 0 to 3*65536. Adding 256 to firstPixelHue each time
-    // means we'll make 3*65536/256 = 768 passes through this outer loop:
-    for(long firstPixelHue = 0; firstPixelHue < 3*65536; firstPixelHue += 256) {
-      for(int i=0; i<strip.numPixels(); i++) { // For each pixel in strip...
-        // Offset pixel hue by an amount to make one full revolution of the
-        // color wheel (range of 65536) along the length of the strip
-        // (strip.numPixels() steps):
-        int pixelHue = firstPixelHue + (i * 65536L / strip.numPixels());
-        // strip.ColorHSV() can take 1 or 3 arguments: a hue (0 to 65535) or
-        // optionally add saturation and value (brightness) (each 0 to 255).
-        // Here we're using just the single-argument hue variant. The result
-        // is passed through strip.gamma32() to provide 'truer' colors
-        // before assigning to each pixel:
-        strip.setPixelColor(i, strip.gamma32(strip.ColorHSV(pixelHue)));
-      }
-      strip.show(); // Update strip with new contents
-      delay(wait);  // Pause for a moment
-    }
-  }
+WS2812B ledStrip(PIXEL_COUNT, PIXEL_PIN);
 
 
 void setup()
 {
-    strip.begin(); // Initialize NeoPixel strip object (REQUIRED)
-    strip.show();  // Initialize all pixels to 'off'
+    ledStrip.begin(); // 初始化 WS2812B LED 灯带
+
+
+    buttonInit(BUTTON_PIN); // 初始化时传入引脚
 
 
     servo1.attach(engine1, 500, 2500); // 引脚 D1，500µs=0度，2500µs=180度
@@ -940,9 +921,6 @@ void setup()
     // servo4.attach(engine4);
     SPIFFS.begin();
     u8g2.begin();
-    pinMode(BUTTON_PIN, INPUT_PULLUP); // GPIO2 设置为输入并启用内部上拉电阻
-    attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonPress, FALLING);
-
     u8g2.setDisplayRotation(U8G2_R2);
     u8g2.firstPage();
     do
@@ -989,7 +967,9 @@ void setup()
 
 void loop()
 {
-    //rainbow(5);
+    ledStrip.showRainbow(2);
+
+
 
     // 对 ADC 数据多次采样并求平均
     float adcVoltage = getAverageAdcVoltage();
@@ -1000,11 +980,13 @@ void loop()
     // 根据电池电压计算电量百分比
     batteryPercentage = mapBatteryPercentage(batteryVoltage);
 
-    if (buttonPressed)
+
+    if (buttonCheck())
     {
-        buttonPressed = false; // 清除按键标志
         front();
     }
+
+
     if (emojiState != prevEmojiState)
     {
         u8g2.clearDisplay();         // 状态变化时清屏
