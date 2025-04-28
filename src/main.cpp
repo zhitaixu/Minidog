@@ -1,6 +1,5 @@
 // 导入头文件
 #include <Arduino.h>
-#include <Servo.h>
 #include <U8g2lib.h>
 #include <Wire.h>
 #include <FS.h>
@@ -13,30 +12,32 @@
 #include "image.cpp"
 #include "ws2812b.h"
 #include "button.h"
+#include "adc.h"
+#include "servofoot.h"  
+
 
 #define BUTTON_PIN 2 // 现在在main.cpp定义了引脚
+
 
 #define PIXEL_PIN    13  // Digital IO pin connected to the NeoPixels.
 #define PIXEL_COUNT 6  // Number of NeoPixels
 
 
+int engine1 = 14;                 // 舵机引脚
+// int engine1offsetleftpwm = -93;   // 舵机左转补偿
+// int engine1offsetrightpwm = -87;  // 舵机左转补偿-40
+int engine2 = 16;                 // 舵机引脚
+// int engine2offsetleftpwm = -120;  // 舵机左转补偿
+// int engine2offsetrightpwm = -122; // 舵机左转补偿-60
+int engine3 = 12;                 // 舵机引脚
+// int engine3offsetleftpwm = -3;    // 舵机左转补偿
+// int engine3offsetrightpwm = -57;  // 舵机左转补偿
+int engine4 = 15;                 // 舵机引脚
+// int engine4offsetleftpwm = -78;   // 舵机左转补偿
+// int engine4offsetrightpwm = -109; // 舵机左转补偿-71
+int speed = 300;                  // 舵机转速
 
-// 定义
-// 分压器比例（输入电压到 ADC 电压的比例）
-const float voltageDividerRatio = 8.4; // 分压比（8.4倍缩小）
-// 电压范围（电池电压）
-const float minVoltage = 6.4; // 电压为0%时
-const float maxVoltage = 8.4; // 电压为100%时
-// 采样次数
-const int numSamples = 10;
-float batteryVoltage = 0; // 计算电池电压
-int batteryPercentage = 0;
 
-
-Servo servo1;
-Servo servo2;
-Servo servo3;
-Servo servo4;
 
 
 U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE, /* clock=*/5, /* data=*/4); // ESP32 Thing, HW I2C with pin remapping
@@ -59,22 +60,6 @@ String weatherapi = "";
 
 
 
-int engine1 = 14;                 // 舵机引脚
-// int engine1offsetleftpwm = -93;   // 舵机左转补偿
-// int engine1offsetrightpwm = -87;  // 舵机左转补偿-40
-int engine2 = 16;                 // 舵机引脚
-// int engine2offsetleftpwm = -120;  // 舵机左转补偿
-// int engine2offsetrightpwm = -122; // 舵机左转补偿-60
-int engine3 = 12;                 // 舵机引脚
-// int engine3offsetleftpwm = -3;    // 舵机左转补偿
-// int engine3offsetrightpwm = -57;  // 舵机左转补偿
-int engine4 = 15;                 // 舵机引脚
-// int engine4offsetleftpwm = -78;   // 舵机左转补偿
-// int engine4offsetrightpwm = -109; // 舵机左转补偿-71
-int speed = 300;                  // 舵机转速
-
-
-
 
 int runtime = 100;                // 运动延时**预留变量，用于控制动作连贯性，如果你不知道这是什么不建议修改**
 static bool initweather = false;  // 天气初始化
@@ -84,8 +69,6 @@ int prevEmojiState = -1; // 用于跟踪之前的 emojiState
 int actionstate = 0;
 int emojiState = 0; // 表情状态
 const char *ssidFile = "/ssid.json";
-
-
 
 
 void handleWiFiConfig()
@@ -464,461 +447,25 @@ void fetchWeather()
 
 
 
-// 对 ADC 数据多次采样并计算平均值
-float getAverageAdcVoltage()
-{
-    long totalAdcValue = 0;
 
-    // 多次采样
-    for (int i = 0; i < numSamples; i++)
-    {
-        totalAdcValue += analogRead(A0); // 读取 ADC 数据
-        delay(10);                       // 每次采样间隔 10ms
-    }
-
-    // 计算平均 ADC 值
-    float averageAdcValue = totalAdcValue / (float)numSamples;
-
-    // 将 ADC 值转换为电压
-    return (averageAdcValue / 1023.0) * 1.0; // ESP8266 的参考电压为 1.0V
-}
-
-// 计算电池电量百分比的函数
-int mapBatteryPercentage(float voltage)
-{
-    if (voltage <= minVoltage)
-        return 0; // 小于等于最小电压时，电量为 0%
-    if (voltage >= maxVoltage)
-        return 100; // 大于等于最大电压时，电量为 100%
-
-    // 根据线性比例计算电量百分比
-    return (int)((voltage - minVoltage) / (maxVoltage - minVoltage) * 100);
-}
-
-
-
-
-
-
-
-
-void front()
-{
-    servo2.write(140); // 旋转到 90 度
-    servo3.write(40);  // 旋转到 90 度
-    delay(100);
-    servo1.write(40);  // 旋转到 90 度
-    servo4.write(140); // 旋转到 90 度
-    delay(100);
-    servo2.write(90); // 旋转到 90 度
-    servo3.write(90); // 旋转到 90 度
-    delay(100);
-    servo1.write(90); // 旋转到 90 度
-    servo4.write(90); // 旋转到 90 度
-    delay(100);
-    servo1.write(140); // 旋转到 90 度
-    servo4.write(40);  // 旋转到 90 度
-    delay(100);
-    servo2.write(40);  // 旋转到 90 度
-    servo3.write(140); // 旋转到 90 度
-    delay(100);
-    servo1.write(90); // 旋转到 90 度
-    servo4.write(90); // 旋转到 90 度
-    delay(100);
-    servo2.write(90); // 旋转到 90 度
-    servo3.write(90); // 旋转到 90 度
-
-    // //+30C 2/3
-    // servo2.writeMicroseconds(1500 + speed + engine2offsetleftpwm);
-    // servo3.writeMicroseconds(1500 - speed - engine3offsetleftpwm);
-    // delay(500-runtime);
-    // servo2.writeMicroseconds(1500);
-    // servo3.writeMicroseconds(1500);
-    // //-30C 1/4
-    // servo1.writeMicroseconds(1500 - speed - engine1offsetrightpwm);
-    // servo4.writeMicroseconds(1500 + speed + engine4offsetrightpwm);
-    // delay(500-runtime);
-    // servo1.writeMicroseconds(1500);
-    // servo4.writeMicroseconds(1500);
-    // // 0C 2/3
-    // servo2.writeMicroseconds(1500 - speed - engine2offsetrightpwm);
-    // servo3.writeMicroseconds(1500 + speed + engine3offsetrightpwm);
-    // delay(500-runtime);
-    // servo2.writeMicroseconds(1500);
-    // servo3.writeMicroseconds(1500);
-    // // 0C 1/4
-    // servo1.writeMicroseconds(1500 + speed + engine1offsetleftpwm);
-    // servo4.writeMicroseconds(1500 - speed - engine4offsetleftpwm);
-    // delay(500-runtime);
-    // servo1.writeMicroseconds(1500);
-    // servo4.writeMicroseconds(1500);
-    // //+30C 1/4
-    // servo1.writeMicroseconds(1500 + speed + engine1offsetleftpwm);
-    // servo4.writeMicroseconds(1500 - speed - engine4offsetleftpwm);
-    // delay(500-runtime);
-    // servo1.writeMicroseconds(1500);
-    // servo4.writeMicroseconds(1500);
-    // //-30C 2/3
-    // servo2.writeMicroseconds(1500 - speed - engine2offsetrightpwm);
-    // servo3.writeMicroseconds(1500 + speed + engine3offsetrightpwm);
-    // delay(500-runtime);
-    // servo2.writeMicroseconds(1500);
-    // servo3.writeMicroseconds(1500);
-    // // 0C 1/4
-    // servo1.writeMicroseconds(1500 - speed - engine1offsetrightpwm);
-    // servo4.writeMicroseconds(1500 + speed + engine4offsetrightpwm);
-    // delay(500-runtime);
-    // servo1.writeMicroseconds(1500);
-    // servo4.writeMicroseconds(1500);
-    // // 0C 2/3
-    // servo2.writeMicroseconds(1500 + speed + engine2offsetleftpwm);
-    // servo3.writeMicroseconds(1500 - speed - engine3offsetleftpwm);
-    // delay(500-runtime);
-    // servo2.writeMicroseconds(1500);
-    // servo3.writeMicroseconds(1500);
-}
-void back()
-{
-    servo3.write(140); // 旋转到 90 度
-    servo2.write(40);  // 旋转到 90 度
-    delay(100);
-    servo4.write(40);  // 旋转到 90 度
-    servo1.write(140); // 旋转到 90 度
-    delay(100);
-    servo3.write(90); // 旋转到 90 度
-    servo2.write(90); // 旋转到 90 度
-    delay(100);
-    servo4.write(90); // 旋转到 90 度
-    servo1.write(90); // 旋转到 90 度
-    delay(100);
-    servo4.write(140); // 旋转到 90 度
-    servo1.write(40);  // 旋转到 90 度
-    delay(100);
-    servo3.write(40);  // 旋转到 90 度
-    servo2.write(140); // 旋转到 90 度
-    delay(100);
-    servo4.write(90); // 旋转到 90 度
-    servo1.write(90); // 旋转到 90 度
-    delay(100);
-    servo3.write(90); // 旋转到 90 度
-    servo2.write(90); // 旋转到 90 度
-
-    // //+30C 2/3
-    // servo2.writeMicroseconds(1500 - speed - engine2offsetrightpwm);
-    // servo3.writeMicroseconds(1500 + speed + engine3offsetrightpwm);
-    // delay(500-runtime);
-    // servo2.writeMicroseconds(1500);
-    // servo3.writeMicroseconds(1500);
-    // //-30C 1/4
-    // servo1.writeMicroseconds(1500 + speed + engine1offsetleftpwm);
-    // servo4.writeMicroseconds(1500 - speed - engine4offsetleftpwm);
-    // delay(500-runtime);
-    // servo1.writeMicroseconds(1500);
-    // servo4.writeMicroseconds(1500);
-    // // 0C 2/3
-    // servo2.writeMicroseconds(1500 + speed + engine2offsetleftpwm);
-    // servo3.writeMicroseconds(1500 - speed - engine3offsetleftpwm);
-    // delay(500-runtime);
-    // servo2.writeMicroseconds(1500);
-    // servo3.writeMicroseconds(1500);
-    // // 0C 1/4
-    // servo1.writeMicroseconds(1500 - speed - engine1offsetrightpwm);
-    // servo4.writeMicroseconds(1500 + speed + engine4offsetrightpwm);
-    // delay(500-runtime);
-    // servo1.writeMicroseconds(1500);
-    // servo4.writeMicroseconds(1500);
-
-    // //+30C 1/4
-    // servo1.writeMicroseconds(1500 - speed - engine1offsetrightpwm);
-    // servo4.writeMicroseconds(1500 + speed + engine4offsetrightpwm);
-    // delay(500-runtime);
-    // servo1.writeMicroseconds(1500);
-    // servo4.writeMicroseconds(1500);
-    // //-30C 2/3
-    // servo2.writeMicroseconds(1500 + speed + engine2offsetleftpwm);
-    // servo3.writeMicroseconds(1500 - speed - engine3offsetleftpwm);
-    // delay(500-runtime);
-    // servo2.writeMicroseconds(1500);
-    // servo3.writeMicroseconds(1500);
-    // // 0C 1/4
-    // servo1.writeMicroseconds(1500 + speed + engine1offsetleftpwm);
-    // servo4.writeMicroseconds(1500 - speed - engine4offsetleftpwm);
-    // delay(500-runtime);
-    // servo1.writeMicroseconds(1500);
-    // servo4.writeMicroseconds(1500);
-    // // 0C 2/3
-    // servo2.writeMicroseconds(1500 - speed - engine2offsetrightpwm);
-    // servo3.writeMicroseconds(1500 + speed + engine3offsetrightpwm);
-    // delay(500-runtime);
-    // servo2.writeMicroseconds(1500);
-    // servo3.writeMicroseconds(1500);
-}
-void left()
-{
-    int num = 0;
-    while (num < 4)
-    {
-        servo1.write(100); // 旋转到 90 度
-        servo4.write(100); // 旋转到 90 度
-        delay(100);
-        servo3.write(60); // 旋转到 90 度
-        servo2.write(60); // 旋转到 90 度
-        delay(100);
-        servo1.write(140); // 旋转到 90 度
-        servo4.write(140); // 旋转到 90 度
-        delay(100);
-        servo3.write(40); // 旋转到 90 度
-        servo2.write(40); // 旋转到 90 度
-        delay(100);
-        servo3.write(90); // 旋转到 90 度
-        servo2.write(90); // 旋转到 90 度
-        servo1.write(90); // 旋转到 90 度
-        servo4.write(90); // 旋转到 90 度
-        delay(100);
-        servo1.write(80); // 旋转到 90 度
-        servo4.write(80); // 旋转到 90 度
-        delay(100);
-        servo3.write(120); // 旋转到 90 度
-        servo2.write(120); // 旋转到 90 度
-        delay(100);
-        servo1.write(90); // 旋转到 90 度
-        servo4.write(90); // 旋转到 90 度
-        delay(100);
-        servo3.write(140); // 旋转到 90 度
-        servo2.write(140); // 旋转到 90 度
-        delay(100);
-        servo3.write(90); // 旋转到 90 度
-        servo2.write(90); // 旋转到 90 度
-
-        num++;
-    }
-    //  +10 1/4
-    // servo1.writeMicroseconds(1500 + speed + engine1offsetleftpwm);
-    // servo4.writeMicroseconds(1500 + speed + engine4offsetrightpwm);
-    // delay(200);
-    //  +30
-    // servo3.writeMicroseconds(1500 - speed - engine3offsetleftpwm);
-    // servo2.writeMicroseconds(1500 - speed - engine2offsetrightpwm);
-    // delay(300);
-    //  +0 1/4
-    // servo1.writeMicroseconds(1500);
-    // servo4.writeMicroseconds(1500);
-    // +20 2/3
-    // delay(200);
-
-    // servo2.writeMicroseconds(1500);
-    // servo3.writeMicroseconds(1500);
-    // delay(100);
-    // //-30
-    // servo1.writeMicroseconds(1500 - speed - engine1offsetrightpwm);
-    // servo4.writeMicroseconds(1500 - speed - engine4offsetleftpwm);
-    // delay(200);
-    // servo3.writeMicroseconds(1500 + speed + engine3offsetrightpwm);
-    // servo2.writeMicroseconds(1500 + speed + engine2offsetleftpwm);
-    // delay(300);
-    // servo1.writeMicroseconds(1500);
-    // servo4.writeMicroseconds(1500);
-    // delay(200);
-    // servo2.writeMicroseconds(1500);
-    // servo3.writeMicroseconds(1500);
-}
-void right()
-{
-
-    int num = 0;
-    while (num < 3)
-    {
-        servo1.write(80); // 旋转到 90 度
-        servo4.write(80); // 旋转到 90 度
-        delay(100);
-        servo3.write(120); // 旋转到 90 度
-        servo2.write(120); // 旋转到 90 度
-        delay(100);
-        servo1.write(40); // 旋转到 90 度
-        servo4.write(40); // 旋转到 90 度
-        delay(100);
-        servo3.write(140); // 旋转到 90 度
-        servo2.write(140); // 旋转到 90 度
-        delay(100);
-        servo3.write(90); // 旋转到 90 度
-        servo2.write(90); // 旋转到 90 度
-        servo1.write(90); // 旋转到 90 度
-        servo4.write(90); // 旋转到 90 度
-        delay(100);
-        servo1.write(100); // 旋转到 90 度
-        servo4.write(100); // 旋转到 90 度
-        delay(100);
-        servo3.write(60); // 旋转到 90 度
-        servo2.write(60); // 旋转到 90 度
-        delay(100);
-        servo1.write(90); // 旋转到 90 度
-        servo4.write(90); // 旋转到 90 度
-        delay(100);
-        servo3.write(40); // 旋转到 90 度
-        servo2.write(40); // 旋转到 90 度
-        delay(100);
-        servo3.write(90); // 旋转到 90 度
-        servo2.write(90); // 旋转到 90 度
-
-        // //  +30
-        // servo1.writeMicroseconds(1500 - speed - engine1offsetrightpwm);
-        // servo4.writeMicroseconds(1500 - speed - engine4offsetleftpwm);
-        // delay(200);
-        // servo3.writeMicroseconds(1500 + speed + engine3offsetrightpwm);
-        // servo2.writeMicroseconds(1500 + speed + engine2offsetleftpwm);
-        // delay(300);
-        // servo1.writeMicroseconds(1500);
-        // servo4.writeMicroseconds(1500);
-        // delay(200);
-        // servo2.writeMicroseconds(1500);
-        // servo3.writeMicroseconds(1500);
-        // delay(100);
-        // //-30
-        // servo1.writeMicroseconds(1500 + speed + engine1offsetleftpwm);
-        // servo4.writeMicroseconds(1500 + speed + engine4offsetrightpwm);
-        // delay(200);
-        // servo3.writeMicroseconds(1500 - speed - engine3offsetleftpwm);
-        // servo2.writeMicroseconds(1500 - speed - engine2offsetrightpwm);
-        // delay(300);
-        // servo1.writeMicroseconds(1500);
-        // servo4.writeMicroseconds(1500);
-        // delay(200);
-        // servo2.writeMicroseconds(1500);
-        // servo3.writeMicroseconds(1500);
-        num++;
-    }
-}
-
-void sitdown()
-{
-    servo2.write(140); // 旋转到 90 度
-    servo4.write(40);  // 旋转到 90 度
-    delay(3000);
-    servo2.write(90); // 旋转到 90 度
-    servo4.write(90); // 旋转到 90 度
-
-    // servo2.writeMicroseconds(1500 + speed + engine3offsetleftpwm);
-    // servo4.writeMicroseconds(1500 - speed - engine3offsetleftpwm);
-    // delay(1000);
-    // servo2.writeMicroseconds(1500);
-    // servo4.writeMicroseconds(1500);
-    // delay(3000);
-    // servo2.writeMicroseconds(1500 - speed - engine3offsetrightpwm);
-    // servo4.writeMicroseconds(1500 + speed + engine3offsetrightpwm);
-    // delay(1000);
-    // servo2.writeMicroseconds(1500);
-    // servo4.writeMicroseconds(1500);
-}
-void lie()
-{
-    servo1.write(180); // 旋转到 90 度
-    servo3.write(0);   // 旋转到 90 度
-    servo2.write(0);   // 旋转到 90 度
-    servo4.write(180); // 旋转到 90 度
-    delay(3000);
-    servo1.write(90); // 旋转到 90 度
-    servo3.write(90); // 旋转到 90 度
-    servo2.write(90); // 旋转到 90 度
-    servo4.write(90); // 旋转到 90 度
-                      // servo1.writeMicroseconds(1500 + speed + engine1offsetleftpwm);
-                      // servo3.writeMicroseconds(1500 - speed - engine3offsetleftpwm);
-                      // servo2.writeMicroseconds(1500 - speed - engine2offsetrightpwm);
-                      // servo4.writeMicroseconds(1500 + speed + engine4offsetrightpwm);
-                      // delay(1000);
-                      // servo1.writeMicroseconds(1500);
-                      // servo2.writeMicroseconds(1500);
-                      // servo3.writeMicroseconds(1500);
-                      // servo4.writeMicroseconds(1500);
-                      // delay(3000);
-                      // servo1.writeMicroseconds(1500 - speed - engine1offsetrightpwm);
-                      // servo3.writeMicroseconds(1500 + speed + engine3offsetrightpwm);
-                      // servo2.writeMicroseconds(1500 + speed + engine2offsetleftpwm);
-                      // servo4.writeMicroseconds(1500 - speed - engine4offsetleftpwm);
-                      // delay(1000);
-                      // servo1.writeMicroseconds(1500);
-                      // servo2.writeMicroseconds(1500);
-                      // servo3.writeMicroseconds(1500);
-                      // servo4.writeMicroseconds(1500);
-}
-
-void toplefthand()
-{
-    int num = 0;
-    while (num < 3)
-    {
-        servo3.write(0); // 旋转到 90 度
-        delay(100);
-        servo3.write(30);
-        delay(100);
-        // 旋转到 90 度
-        // servo3.writeMicroseconds(1500 - speed - engine3offsetleftpwm);
-        // delay(1000);
-        // servo3.writeMicroseconds(1500);
-        // delay(500);
-        // servo3.writeMicroseconds(1500 + speed + engine3offsetrightpwm);
-        // delay(1000);
-        // servo3.writeMicroseconds(1500);
-        num++;
-    }
-    servo3.write(90);
-}
-void toprighthand()
-{
-
-    int num = 0;
-    while (num < 3)
-    {
-        servo1.write(180); // 旋转到 90 度
-        delay(100);
-        servo1.write(150);
-        delay(100);
-        // servo1.writeMicroseconds(1500 + speed + engine1offsetleftpwm);
-        // delay(1000);
-        // servo1.writeMicroseconds(1500);
-        // delay(500);
-        // servo1.writeMicroseconds(1500 - speed - engine1offsetrightpwm);
-        // delay(1000);
-        // servo1.writeMicroseconds(1500);
-        num++;
-    }
-    servo1.write(90);
-}
-void dosleep()
-{
-    servo1.write(0);                   // 旋转到 90 度
-    servo3.write(180);                 // 旋转到 90 度
-    servo2.write(180);                 // 旋转到 90 度
-    servo4.write(0); 
-}
-
-
-WS2812B ledStrip(PIXEL_COUNT, PIXEL_PIN);
+WS2812B ledStrip(PIXEL_COUNT, PIXEL_PIN); //配置ws2812b
 
 
 void setup()
 {
+
     ledStrip.begin(); // 初始化 WS2812B LED 灯带
 
 
     buttonInit(BUTTON_PIN); // 初始化时传入引脚
 
 
-    servo1.attach(engine1, 500, 2500); // 引脚 D1，500µs=0度，2500µs=180度
-    servo2.attach(engine2, 500, 2500); // 引脚 D1，500µs=0度，2500µs=180度
-    servo3.attach(engine3, 500, 2500); // 引脚 D1，500µs=0度，2500µs=180度
-    servo4.attach(engine4, 500, 2500); // 引脚 D1，500µs=0度，2500µs=180度
-    servo1.write(90);                   // 旋转到 90 度
-    servo3.write(90);                 // 旋转到 90 度
-    servo2.write(90);                 // 旋转到 90 度
-    servo4.write(90);                   // 旋转到 90 度
-    // servo1.write(0);                   // 旋转到 90 度
-    // servo3.write(180);                 // 旋转到 90 度
-    // servo2.write(180);                 // 旋转到 90 度
-    // servo4.write(0);                   // 旋转到 90 度
-    // servo1.attach(engine1);
-    // servo2.attach(engine2);
-    // servo3.attach(engine3);
-    // servo4.attach(engine4);
+    initAdcSampler();
+
+
+    setupServo(engine1, engine2, engine3, engine4);
+
+
     SPIFFS.begin();
     u8g2.begin();
     u8g2.setDisplayRotation(U8G2_R2);
@@ -970,15 +517,12 @@ void loop()
     ledStrip.showRainbow(2);
 
 
-
-    // 对 ADC 数据多次采样并求平均
-    float adcVoltage = getAverageAdcVoltage();
-
-    // 将采样的 ADC 电压转换为实际电池电压
-    batteryVoltage = adcVoltage * voltageDividerRatio; // 计算电池电压
-
-    // 根据电池电压计算电量百分比
-    batteryPercentage = mapBatteryPercentage(batteryVoltage);
+    updateAdcSampler();
+    if (isAdcSamplingDone()) {
+        float adcVoltage = getLastAverageVoltage();
+        batteryVoltage = adcVoltage * voltageDividerRatio;
+        batteryPercentage = mapBatteryPercentage(batteryVoltage);
+    }
 
 
     if (buttonCheck())
