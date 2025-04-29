@@ -1,6 +1,6 @@
 // 导入头文件
+
 #include <Arduino.h>
-#include <U8g2lib.h>
 #include <Wire.h>
 #include <FS.h>
 #include <ESP8266WiFi.h>
@@ -9,11 +9,12 @@
 #include <NTPClient.h>
 #include <ArduinoJson.h>
 #include <WiFiUdp.h>
-#include "image.cpp"
+#include "image.h"
 #include "ws2812b.h"
 #include "button.h"
 #include "adc.h"
 #include "servofoot.h"  
+#include "oledDisplay.h"
 
 
 #define BUTTON_PIN 2 // 现在在main.cpp定义了引脚
@@ -24,29 +25,18 @@
 
 
 int engine1 = 14;                 // 舵机引脚
-// int engine1offsetleftpwm = -93;   // 舵机左转补偿
-// int engine1offsetrightpwm = -87;  // 舵机左转补偿-40
 int engine2 = 16;                 // 舵机引脚
-// int engine2offsetleftpwm = -120;  // 舵机左转补偿
-// int engine2offsetrightpwm = -122; // 舵机左转补偿-60
 int engine3 = 12;                 // 舵机引脚
-// int engine3offsetleftpwm = -3;    // 舵机左转补偿
-// int engine3offsetrightpwm = -57;  // 舵机左转补偿
 int engine4 = 15;                 // 舵机引脚
-// int engine4offsetleftpwm = -78;   // 舵机左转补偿
-// int engine4offsetrightpwm = -109; // 舵机左转补偿-71
 int speed = 300;                  // 舵机转速
 
 
-
-
-U8G2_SSD1306_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE, /* clock=*/5, /* data=*/4); // ESP32 Thing, HW I2C with pin remapping
 // 设置WiFi热点名称和密码
 const char *ssid = "EDA-Robot";
 const char *password = ""; // 无密码
 AsyncWebServer server(80);
 // random(minValue, maxValue)
-//  微调参数值，舵机1
+
 WiFiUDP ntpUDP;
 const char *weatherAPI = "http://api.seniverse.com/v3/weather/daily.json?key=";
 NTPClient timeClient(ntpUDP, "ntp1.aliyun.com", 8 * 3600, 60000);
@@ -56,9 +46,6 @@ String weather = "";
 String useruid = "";
 String cityname = "";
 String weatherapi = "";
-
-
-
 
 
 int runtime = 100;                // 运动延时**预留变量，用于控制动作连贯性，如果你不知道这是什么不建议修改**
@@ -393,11 +380,6 @@ void fetchWeather()
                 }
                 http.end();
             }
-            else
-            {
-                Serial.println("Failed to connect to server");
-            }
-            //  mylcd.fillScreen(TFT_BLACK);
         }
     }
     if (weather == "阴" || weather == "多云")
@@ -446,8 +428,6 @@ void fetchWeather()
 }
 
 
-
-
 WS2812B ledStrip(PIXEL_COUNT, PIXEL_PIN); //配置ws2812b
 
 
@@ -467,14 +447,13 @@ void setup()
 
 
     SPIFFS.begin();
-    u8g2.begin();
-    u8g2.setDisplayRotation(U8G2_R2);
-    u8g2.firstPage();
-    do
-    {
-        u8g2.setFont(u8g2_font_ncenB14_tr);
-        u8g2.drawXBMP(0, (64 / 2 - 22 / 2), 128, 22, logo);
-    } while (u8g2.nextPage());
+
+    initOLED();
+    showLogo();
+    delay(5000);
+    showWiFiInfo();
+    delay(5000);
+
     // 初始化串口
     Serial.begin(115200);
     // 设置WiFi为热点模式
@@ -492,24 +471,12 @@ void setup()
     }
     else
     {
-        handleWiFiConfig();
+        showTime(timeClient);
         Serial.println("WiFi connected");
         timeClient.begin();
-        timeClient.update(); // 获取初始时间
+        showTime(timeClient); // 获取初始时间
     }
-    delay(5000);
-    u8g2.clearDisplay();
-    do
-    {
-        u8g2.setFont(u8g2_font_ncenB08_tr);
-        u8g2.drawXBMP(0, 0, 64, 64, wifi);
-        u8g2.drawStr(64, 10, "WIFI_AP");
-        u8g2.drawStr(64, 27, "EDA-Robot");
-        u8g2.drawStr(64, 43, "192.168.4.1");
-        u8g2.drawStr(64, 60, "WIFI CTRL");
-    } while (u8g2.nextPage());
-    delay(5000);
-    u8g2.clearDisplay();
+    
 }
 
 void loop()
@@ -533,8 +500,8 @@ void loop()
 
     if (emojiState != prevEmojiState)
     {
-        u8g2.clearDisplay();         // 状态变化时清屏
         prevEmojiState = emojiState; // 更新状态
+        showEmoji(emojiState);
     }
     if (freestate)
     {
@@ -542,55 +509,20 @@ void loop()
         actionstate = random(0, 10);
     }
     // 可以使用switch优化效率
-    switch (actionstate)
-    {
-    case 0 /* constant-expression */:
-        /* code */
-        break;
-    case 1:
-        front(); // 执行一次舵机动作
-        actionstate = 0;
-        break;
-    case 2:
-        left(); // 执行一次舵机动作
-        actionstate = 0;
-        break;
-    case 3:
-        right(); // 执行一次舵机动作
-        actionstate = 0;
-        break;
-    case 4:
-        back(); // 执行一次舵机动作
-        actionstate = 0;
-        break;
-    case 5:
-        toplefthand(); // 执行一次舵机动作
-        actionstate = 0;
-        break;
-    case 6:
-        toprighthand(); // 执行一次舵机动作
-        actionstate = 0;
-        break;
-   
-    case 10:
-        dosleep(); // 执行一次舵机动作
-        actionstate = 0;
-        break;
-    case 7:
-        lie(); // 执行一次舵机动作
-        actionstate = 0;
-        break;
-    case 8:
-        sitdown(); // 执行一次舵机动作
-        actionstate = 0;
-        break;
-    case 9:
-        emojiState = random(0, 7); // 执行一次舵机动作
-        actionstate = 0;
-        break;
-    default:
-        break;
+    switch (actionstate) {
+        case 1: front(); break;
+        case 2: left(); break;
+        case 3: right(); break;
+        case 4: back(); break;
+        case 5: toplefthand(); break;
+        case 6: toprighthand(); break;
+        case 7: lie(); break;
+        case 8: sitdown(); break;
+        case 9: emojiState = random(0, 7); break;
+        case 10: dosleep(); break;
+        default: break;
     }
+    actionstate = 0;
 
     switch (emojiState)
     {
@@ -653,59 +585,22 @@ void loop()
         } while (u8g2.nextPage());
 
         break;
-    case 7: // 第四页
-        if (WiFi.status() != WL_CONNECTED)
-        {
-            do
-            {
-                u8g2.setFont(u8g2_font_ncenB08_tr);
-                u8g2.drawXBMP(0, 0, 64, 64, wifi);
-                u8g2.drawStr(64, 20, "IP:");
-                u8g2.drawStr(64, 40, "192.168.4.1");
-                u8g2.drawStr(64, 60, "Need NET");
-            } while (u8g2.nextPage());
-        }
-        else
-        {
+    case 7:
+        if (WiFi.status() != WL_CONNECTED) {
+            showWiFiInfo();
+        } else {
             fetchWeather();
+            showWeather(temperature, humidity, weather);
         }
         break;
-
-        break;
-    case 8: // 第四页
-        if (WiFi.status() != WL_CONNECTED)
-        {
-            do
-            {
-                u8g2.setFont(u8g2_font_ncenB08_tr);
-                u8g2.drawXBMP(0, 0, 64, 64, wifi);
-                u8g2.drawStr(64, 20, "IP:");
-                u8g2.drawStr(64, 40, "192.168.4.1");
-                u8g2.drawStr(64, 60, "Need NET");
-            } while (u8g2.nextPage());
-        }
-        else
-        {
-            do
-            {
-                timeClient.update(); // 更新时间
-                u8g2.setFont(u8g2_font_ncenB14_tr);
-                timeClient.update();
-                u8g2.drawXBMP(0, 0, 64, 64, timeimage);
-                // 获取当前时间
-                // 显示时间到 OLED
-                int currentHour = timeClient.getHours();
-                int currentMinute = timeClient.getMinutes();
-                String timeToDisplay = String(currentHour) + ":" + String(currentMinute);
-                u8g2.drawStr(64, 30, "TIME");
-                u8g2.setCursor(64, 50);
-                u8g2.print(timeToDisplay);
-
-            } while (u8g2.nextPage());
+    case 8:
+        if (WiFi.status() != WL_CONNECTED) {
+            showWiFiInfo();
+        } else {
+            showTime(timeClient);
         }
         break;
     case 9: // 第四页
-
         do
         {
             u8g2.setFont(u8g2_font_ncenB14_tr);
