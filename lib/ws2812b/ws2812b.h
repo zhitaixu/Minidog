@@ -3,16 +3,17 @@
 
 #include <Adafruit_NeoPixel.h>
 
-class WS2812B{
+class WS2812B {
 public:
     WS2812B(uint16_t numPixels, uint8_t pin);
     void begin();
-    void showRainbow(uint8_t Wait);
+    void update(); // Changed from showRainbow
 
 private:
-    Adafruit_NeoPixel strip;
-    void rainbowCycle(uint8_t wait);
+    Adafruit_NeoPixel _strip;
+    uint16_t _rainbow_j = 0;
+    unsigned long _last_update = 0;
+    uint8_t _wait_ms = 2; // Animation delay
 };
 
-#endif
-
+#endif // WS2812B_H

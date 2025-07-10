@@ -1,7 +1,7 @@
+
 #include "adc.h"
 
-float batteryVoltage = 0;
-int batteryPercentage = 0;
+// Note: Global variables batteryVoltage and batteryPercentage are now defined in main.cpp
 
 // 采样器内部变量
 static long totalAdcValue = 0;

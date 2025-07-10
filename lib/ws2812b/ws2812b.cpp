@@ -1,28 +1,27 @@
-#include <ws2812b.h>
+#include "ws2812b.h"
 
 WS2812B::WS2812B(uint16_t numPixels, uint8_t pin)
-    : strip(numPixels, pin, NEO_GRB + NEO_KHZ800) {}
+    : _strip(numPixels, pin, NEO_GRB + NEO_KHZ800) {}
 
 void WS2812B::begin() {
-    strip.begin(); // Initialize NeoPixel strip object (REQUIRED)
-    strip.show();  // Initialize all pixels to 'off'
-    strip.setBrightness(20);
+    _strip.begin();
+    _strip.show(); // Initialize all pixels to 'off'
+    _strip.setBrightness(20);
 }
 
+void WS2812B::update() {
+    unsigned long current_millis = millis();
+    if (current_millis - _last_update >= _wait_ms) {
+        _last_update = current_millis;
 
-void WS2812B::rainbowCycle(uint8_t wait){
-    uint16_t i, j;
-
-    for (j = 0; j < 256 * 1; j++) { // 5 cycles of all colors on the wheel
-        for (i = 0; i < strip.numPixels(); i++) {
-            // strip.setPixelColor(i, strip.ColorHSV((i * 256 / strip.numPixels() + j) & 255));
-            strip.setPixelColor(i, strip.ColorHSV((i * 65536 / strip.numPixels() + j * 256) % 65536));
+        for (uint16_t i = 0; i < _strip.numPixels(); i++) {
+            _strip.setPixelColor(i, _strip.ColorHSV((i * 65536 / _strip.numPixels() + _rainbow_j * 256) % 65536));
         }
-        strip.show();
-        delay(wait);
-    }
-}
+        _strip.show();
 
-void WS2812B::showRainbow(uint8_t wait) {
-    rainbowCycle(wait);
+        _rainbow_j++;
+        if (_rainbow_j >= 256) {
+            _rainbow_j = 0;
+        }
+    }
 }
