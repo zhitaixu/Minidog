@@ -10,6 +10,7 @@
 #include "button.h"
 #include "adc.h"
 #include "WebServerManager.h"
+#include "SerialCommandManager.h"
 
 // --- Global Objects ---
 WiFiUDP ntpUDP;
@@ -36,6 +37,7 @@ String cachedFormattedTime;
 
 WebServerManager webServerManager(actionstate, emojiState, speed, freestate, useruid, cityname, weatherapi, batteryVoltage, batteryPercentage);
 WS2812B ledStrip(PIXEL_COUNT, PIXEL_PIN);
+SerialCommandManager serialCommandManager;
 
 // --- Background Task Timers ---
 unsigned long lastWeatherUpdateTime = 0;
@@ -44,8 +46,6 @@ const unsigned long WEATHER_UPDATE_INTERVAL = 15 * 60 * 1000; // 15 minutes
 const unsigned long NTP_UPDATE_INTERVAL_LOOP = 60 * 1000; // 1 minute
 
 void setup() {
-    Serial.begin(115200);
-
     // Hardware Init
     ledStrip.begin();
     buttonInit(BUTTON_PIN);
@@ -54,6 +54,27 @@ void setup() {
     displayManager.init();
     displayManager.showLogo();
     delay(2000); // Keep a short delay for logo visibility
+    
+    // 初始化串口命令管理器
+    serialCommandManager.begin(9600);
+    serialCommandManager.setActionCallback([](int action) {
+        ActionType actionType = ACTION_NONE;
+        switch(action) {
+            case 1: actionType = ACTION_FRONT; break;
+            case 2: actionType = ACTION_LEFT; break;
+            case 3: actionType = ACTION_RIGHT; break;
+            case 4: actionType = ACTION_BACK; break;
+            case 5: actionType = ACTION_TOP_LEFT_HAND; break;
+            case 6: actionType = ACTION_TOP_RIGHT_HAND; break;
+            case 7: actionType = ACTION_LIE; break;
+            case 8: actionType = ACTION_SITDOWN; break;
+            case 10: actionType = ACTION_SLEEP; break;
+            default: actionType = ACTION_NONE; break;
+        }
+        if (actionType != ACTION_NONE) {
+            actionSequencer.startAction(actionType);
+        }
+    });
 
     // Services Init
     if (wifiManager.loadConfig()) {
@@ -105,6 +126,9 @@ void loop() {
     actionSequencer.update();
     ledStrip.update();
     updateAdcSampler();
+    
+    // 处理串口命令
+    serialCommandManager.update();
 
     // --- Background data fetching ---
     handleBackgroundTasks();
